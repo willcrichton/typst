@@ -10,9 +10,23 @@ use crate::{
     HtmlDocument, HtmlElement, HtmlFrame, HtmlNode, HtmlTag, attr, charsets, tag,
 };
 
-/// Encodes an HTML document into a string.
+/// Encodes an HTML document into an HTML string.
 pub fn html(document: &HtmlDocument) -> SourceResult<String> {
-    let mut w = Writer::new(&document.introspector, true);
+    let mut w = Writer::new(&document.introspector, true, true);
+    w.buf.push_str("<!DOCTYPE html>");
+    write_indent(&mut w);
+    write_element(&mut w, &document.root)?;
+    if w.pretty {
+        w.buf.push('\n');
+    }
+    Ok(w.buf)
+}
+
+/// Encodes an HTML document into an XHTML string.
+pub fn xhtml(document: &HtmlDocument) -> SourceResult<String> {
+    let mut w = Writer::new(&document.introspector, true, true);
+    w.buf.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+    write_indent(&mut w);
     w.buf.push_str("<!DOCTYPE html>");
     write_indent(&mut w);
     write_element(&mut w, &document.root)?;
@@ -32,12 +46,20 @@ struct Writer<'a> {
     introspector: &'a Introspector,
     /// Whether pretty printing is enabled.
     pretty: bool,
+    /// Whether the output should be XHTML.
+    xhtml: bool,
 }
 
 impl<'a> Writer<'a> {
     /// Creates a new writer.
-    fn new(introspector: &'a Introspector, pretty: bool) -> Self {
-        Self { buf: String::new(), level: 0, introspector, pretty }
+    fn new(introspector: &'a Introspector, pretty: bool, xhtml: bool) -> Self {
+        Self {
+            buf: String::new(),
+            level: 0,
+            introspector,
+            pretty,
+            xhtml,
+        }
     }
 }
 
@@ -105,6 +127,12 @@ fn write_element(w: &mut Writer, element: &HtmlElement) -> SourceResult<()> {
         if !element.children.is_empty() {
             bail!(element.span, "HTML void elements must not have children");
         }
+        if w.xhtml {
+            w.buf.push_str("</");
+            w.buf.push_str(&element.tag.resolve());
+            w.buf.push('>');
+        }
+
         return Ok(());
     }
 
